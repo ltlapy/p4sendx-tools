@@ -30,7 +30,7 @@ Forked from [Petit4Send](http://rei.to/petit4send.html) by Rei Software
 ## Start
 
 Requirements:
-- Flipper Zero on Momentum firmware
+- Flipper Zero
 - Python 3 with Pillow on a PC.
 
 1. [Set up](docs/guide.md#set-up) the Flipper app and P4SENDX.

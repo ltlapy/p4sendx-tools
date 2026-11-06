@@ -10,9 +10,8 @@ mntm-012, API 87.1.
 
 ## Use it
 
-Take the release file for your firmware: `sb4_send-momentum.fap` for Momentum, `sb4_send-api87.fap`
-for official 1.4.x, `sb4_send-api88.fap` for official 1.5.x. Copy it to `apps/USB/` on the SD card,
-open `SB4 Send`, and pick a file. The [guide](../../docs/guide.md) covers full transfers.
+Copy the release's `.fap` for your firmware to `apps/USB/` on the SD card, open `SB4 Send`, and
+pick a file. The [guide](../../docs/guide.md) covers full transfers.
 
 | Button | Run screen |
 |---|---|

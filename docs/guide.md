@@ -13,17 +13,11 @@
 
 ### Flipper
 
-Pick the file for your firmware from a release and copy it to `apps/USB/` on the SD card. It appears
-as `SB4 Send`.
-
-| Firmware | File |
-|---|---|
-| Momentum mntm-012 | `sb4_send-momentum.fap` |
-| Official 1.4.x | `sb4_send-api87.fap` |
-| Official 1.5.x | `sb4_send-api88.fap` |
+Pick the `.fap` for your firmware from a release; the release notes list them. Copy it to `apps/USB/`
+on the SD card. It appears as `SB4 Send`.
 
 If the Flipper reports an API mismatch, [build it](../flipper/sb4_send/README.md#build) for your
-firmware. The app has run only on Momentum firmware so far.
+firmware.
 
 ### SmileBASIC 4
 
