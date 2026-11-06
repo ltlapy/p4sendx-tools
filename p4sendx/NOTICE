@@ -1,0 +1,24 @@
+P4SENDX.PRG is P4SEND 1.2.2, the SmileBASIC 4 side of Petit4Send by Rei Software, with
+changes. The original and its statement of permission are at:
+
+    http://rei.to/petit4send.html
+
+Rei Software's statement:
+
+    2次配布、商用利用、改造、リバースエンジニアリングなどもご自由にどうぞ。
+
+In English: redistribution, commercial use, modification and reverse engineering are free.
+
+The credit to Rei Software stays in the program and here. Problems in this version are not
+Rei Software's.
+
+Changes by ltlapy, 2026, under the MIT License in LICENSE:
+
+- One USB RECEIVE for a file and for an archive of many files, saved in parts, resumable.
+- Parity packets, repaired on receiving.
+- Even faster transfer mode (NS1/NS2 mode).
+- New screens: parts bar, progress bar, signal icon, plain messages, sounds.
+- A warning about auto-sleep before any USB receive.
+- Runs as a subprogram with SUBRUN, writing to the main side's current project.
+- SCREENSHOT SEND no longer drops the end of a text with an odd number of characters.
+- Comparing with the file already there, to skip its prompts.

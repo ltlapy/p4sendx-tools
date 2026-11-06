@@ -1,0 +1,7 @@
+dist/
+build/
+__pycache__/
+*.pyc
+*.p4a
+*.fap
+.vscode/

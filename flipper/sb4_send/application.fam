@@ -1,0 +1,12 @@
+App(
+    appid="sb4_send",
+    name="SB4 Send",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="bad_usb_app",
+    stack_size=2 * 1024,
+    fap_icon="icon.png",
+    fap_icon_assets="images",
+    fap_category="USB",
+    fap_author="ltlapy, from Bad KB of Momentum Firmware",
+    fap_description="Sends files to SmileBASIC 4 over USB as typed text or by the PETIT4SEND format",
+)

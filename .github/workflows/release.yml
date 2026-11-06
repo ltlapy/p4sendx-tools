@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  UFBT_VERSION: "0.2.5"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install pillow "ufbt==$UFBT_VERSION"
+      - run: sh tests/run.sh
+      - name: Build for Momentum, official API 87 and 88
+        run: |
+          mkdir out
+          official=https://update.flipperzero.one/builds/firmware
+          for pair in \
+            momentum:https://up.momentum-fw.dev/builds/firmware/mntm-012/flipper-z-f7-sdk-mntm-012.zip \
+            api87:$official/1.4.3/flipper-z-f7-sdk-1.4.3.zip \
+            api88:$official/1.5.1/flipper-z-f7-sdk-1.5.1.zip; do
+            name=${pair%%:*}
+            ufbt update --hw-target f7 --url "${pair#*:}"
+            (cd flipper/sb4_send && ufbt)
+            cp flipper/sb4_send/dist/sb4_send.fap "out/sb4_send-$name.fap"
+          done
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes \
+            out/sb4_send-momentum.fap out/sb4_send-api87.fap out/sb4_send-api88.fap \
+            p4sendx/P4SENDX.PRG pc/p4pack.py pc/p4recv.py
