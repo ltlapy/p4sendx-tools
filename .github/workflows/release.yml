@@ -37,6 +37,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file .github/release-notes.md \
+          # The release notes: this tag's section of CHANGELOG.md, then the list of files.
+          awk -v tag="## $GITHUB_REF_NAME" '$0 == tag { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > notes.md
+          { echo; echo "## Files"; echo; cat .github/release-notes.md; } >> notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md \
             out/sb4_send-momentum.fap out/sb4_send-api87.fap out/sb4_send-api88.fap \
             p4sendx/P4SENDX.PRG pc/p4pack.py pc/p4recv.py
