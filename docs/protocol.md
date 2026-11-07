@@ -258,6 +258,8 @@ From `P4S Start Part`, for each part:
 
 After the last part, keep tapping until the user presses Stop, as SB4 is still writing.
 
+`Send Part` sends one chosen part the same way, then keeps tapping until Stop.
+
 Classic data packets hold A, B and Esc, which would answer a dialog, so no data goes during step 2. With a
 wait too short, SB4 sees a cancelled save or damaged data, and asks for the part again.
 
@@ -277,11 +279,14 @@ The Flipper sends a single file with `P4S Parity`, as in [Parity](#parity).
 A file of such a name from a stock sender gets a message about its header or prefix, with no save.
 
 **Parts.** Coming in, P4SENDX lists `P4A*` DAT files. If there are any, it reads them, checks their prefixes
-and works out the next part. It offers the write if all are saved, and a list if there are several archives
-or unreadable files.
+and works out which are missing. It offers the write if all are saved, and a list if there are several
+archives or unreadable files.
 
-A part with the wrong index is dropped with no prompt. A bad CRC, a cancelled save or a lost packet asks for
-that part by number. P4SENDX keeps waiting, and takes it when it comes. Every part is saved, the last too.
+Any part of the archive not saved yet is taken, in any order. If the first part saved is not part 0, the
+archive id and count come from its prefix. A part already saved is dropped with no prompt. A bad CRC, a
+cancelled save or a lost packet marks that part failed, and P4SENDX takes the next one. If a stream's header
+is lost, its index is taken as the part after the last one seen. Once the last part has passed, P4SENDX lists
+the missing parts, with runs as `a-b`. Every part is saved, the last too.
 
 **Writing.** With all parts saved, it checks prefixes, magic, CRC-32, method and image size. It then unpacks
 entries in order, one at a time, holding one part and the ring. It checks each entry's CRC and writes with
@@ -307,8 +312,10 @@ SAVEV and SAVEG with their dialogs. `UNPACK` counts the rest of writing.
 
 ## Signal
 
-The icon estimates the chance S that the next part arrives. P4SENDX keeps 15 buckets of 10 s of reception,
-between parts too, with E packets expected, M missing including repaired, Gr groups, and Gf groups not repaired:
+The icon estimates the chance S that the next part arrives. P4SENDX keeps 15 buckets of 10 s spent inside
+streams, from a leader to the stream's end, with E packets expected, M missing including repaired, Gr groups,
+and Gf groups not repaired. Time between streams neither counts nor ages the buckets. A stream starts a new
+window once the old one holds 10 s, and the icon keeps the old reading until the new window holds 10 s too.
 
     p = M / E
     f = Gf / Gr

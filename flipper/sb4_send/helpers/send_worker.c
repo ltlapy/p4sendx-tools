@@ -173,7 +173,10 @@ static void petit4_stream_begin(BadUsbSender* bad_usb) {
                                                       FuriThreadPriorityHigh);
 }
 
-static void send_restart(BadUsbSender* bad_usb) {
+/* false for an error, which st.error tells */
+static bool send_restart(BadUsbSender* bad_usb) {
+    uint32_t only = bad_usb->petit4_only_next;
+    bad_usb->petit4_only_next = PETIT4_ONLY_NONE;
     bad_usb->text_stage = 0;
     bad_usb->text_done = 0;
     petit4_indent_init(&bad_usb->text_indent);
@@ -185,16 +188,25 @@ static void send_restart(BadUsbSender* bad_usb) {
     bad_usb->remain_tick = furi_get_tick() - 1000;
     if(bad_usb->send_cfg.mode == BadUsbModePetit4) {
         if(bad_usb->petit4_batch) {
-            petit4_run_restart(&bad_usb->petit4_run, furi_get_tick());
+            bad_usb->st.part_only = only != PETIT4_ONLY_NONE;
+            if(!bad_usb->st.part_only) {
+                petit4_run_restart(&bad_usb->petit4_run, furi_get_tick());
+            } else if(!petit4_run_restart_one(
+                          &bad_usb->petit4_run, bad_usb->petit4, only, furi_get_tick())) {
+                strlcpy(
+                    bad_usb->st.error, petit4_error(bad_usb->petit4), sizeof(bad_usb->st.error));
+                return false;
+            }
             if(bad_usb->petit4_sync != BAD_USB_PETIT4_DETECT) {
                 // The first step of the run starts the part
                 bad_usb->st.line_cur = 1;
                 furi_thread_set_current_priority(FuriThreadPriorityNormal);
-                return;
+                return true;
             }
         }
         petit4_stream_begin(bad_usb);
     }
+    return true;
 }
 
 static void petit4_show_position(BadUsbSender* bad_usb) {
@@ -545,9 +557,12 @@ static int32_t bad_usb_worker(void* context) {
                 delay_val = 0;
                 bad_usb->st.line_cur = 0;
                 storage_file_seek(send_file, 0, true);
-                send_restart(bad_usb);
-                worker_state = BadUsbStateRunning;
-                bad_usb->st.elapsed = 0;
+                if(send_restart(bad_usb)) {
+                    worker_state = BadUsbStateRunning;
+                    bad_usb->st.elapsed = 0;
+                } else {
+                    worker_state = BadUsbStateSendError;
+                }
             } else if(flags & WorkerEvtDisconnect) {
                 worker_state = BadUsbStateNotConnected; // Disconnected
             }
@@ -567,7 +582,11 @@ static int32_t bad_usb_worker(void* context) {
                 delay_val = 0;
                 bad_usb->st.line_cur = 0;
                 storage_file_seek(send_file, 0, true);
-                send_restart(bad_usb);
+                if(!send_restart(bad_usb)) {
+                    worker_state = BadUsbStateSendError;
+                    bad_usb->st.state = worker_state;
+                    continue;
+                }
                 // extra time for PC to recognize Flipper as keyboard
                 flags = furi_thread_flags_wait(
                     WorkerEvtEnd | WorkerEvtDisconnect | WorkerEvtStartStop,
@@ -731,7 +750,9 @@ BadUsbSender* bad_usb_sender_open(FuriString* file_path, const BadUsbSendConfig*
     bad_usb->st.remain_s = PETIT4_REMAIN_NONE;
     bad_usb->st.part_count = 0;
     bad_usb->st.part_stage = BadUsbPartStageNone;
+    bad_usb->st.part_only = false;
     bad_usb->petit4_batch = false;
+    bad_usb->petit4_only_next = PETIT4_ONLY_NONE;
     bad_usb->send_cfg = *send_cfg;
     bad_usb->petit4 = NULL;
     bad_usb->petit4_sync = BAD_USB_PETIT4_SLOW;
@@ -792,6 +813,14 @@ void bad_usb_sender_set_keyboard_layout(BadUsbSender* bad_usb, FuriString* layou
 
 void bad_usb_sender_start_stop(BadUsbSender* bad_usb) {
     furi_assert(bad_usb);
+    // A Send Part cancelled while waiting for USB is not kept for the next Run
+    bad_usb->petit4_only_next = PETIT4_ONLY_NONE;
+    furi_thread_flags_set(furi_thread_get_id(bad_usb->thread), WorkerEvtStartStop);
+}
+
+void bad_usb_sender_send_part(BadUsbSender* bad_usb, uint32_t part) {
+    furi_assert(bad_usb);
+    bad_usb->petit4_only_next = part;
     furi_thread_flags_set(furi_thread_get_id(bad_usb->thread), WorkerEvtStartStop);
 }
 

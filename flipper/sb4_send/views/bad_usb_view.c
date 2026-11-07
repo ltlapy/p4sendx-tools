@@ -32,6 +32,14 @@ static void bad_usb_draw_batch_line(const BadUsbModel* model, FuriString* line) 
             furi_string_printf(
                 line, "(%s) from %lu/%lu", model->layout, st->part_start, st->part_count);
         }
+    } else if(st->part_only) {
+        if(st->part_stage == BadUsbPartStageSend) {
+            furi_string_printf(line, "Part %lu only, sending", st->part_cur);
+        } else if(st->part_stage == BadUsbPartStageWait) {
+            furi_string_printf(line, "Part %lu only, in %lus", st->part_cur, st->wait_left_s);
+        } else if(st->part_stage == BadUsbPartStageConfirm) {
+            furi_string_printf(line, "Part %lu only: confirming", st->part_cur);
+        }
     } else if(st->part_stage == BadUsbPartStageSend) {
         furi_string_printf(line, "Part %lu/%lu sending", st->part_cur, st->part_count);
     } else if(st->part_stage == BadUsbPartStageWait) {
@@ -79,6 +87,7 @@ static void bad_usb_draw_callback(Canvas* canvas, void* _model) {
        (state == BadUsbStateNotConnected)) {
         elements_button_center(canvas, "Run");
         elements_button_left(canvas, "Config");
+        if(model->state.part_count > 0) elements_button_right(canvas, "Part");
     } else if((state == BadUsbStateRunning) || (state == BadUsbStateDelay)) {
         elements_button_center(canvas, "Stop");
         if(!model->pause_wait) {
@@ -195,10 +204,36 @@ static void bad_usb_draw_callback(Canvas* canvas, void* _model) {
     furi_string_free(disp_str);
 }
 
+/* An archive, and nothing being sent: Right or a long OK can send one part. */
+static bool bad_usb_view_can_send_part(BadUsb* bad_usb) {
+    bool can = false;
+    with_view_model(
+        bad_usb->view,
+        BadUsbModel * model,
+        {
+            BadUsbWorkerState state = model->state.state;
+            can = model->state.part_count > 0 &&
+                  ((state == BadUsbStateIdle) || (state == BadUsbStateDone) ||
+                   (state == BadUsbStateNotConnected));
+        },
+        false);
+    return can;
+}
+
 static bool bad_usb_input_callback(InputEvent* event, void* context) {
     furi_assert(context);
     BadUsb* bad_usb = context;
     bool consumed = false;
+
+    // A long press comes instead of a short one, never with it
+    if(((event->type == InputTypeShort && event->key == InputKeyRight) ||
+        (event->type == InputTypeLong &&
+         (event->key == InputKeyRight || event->key == InputKeyOk))) &&
+       bad_usb_view_can_send_part(bad_usb)) {
+        furi_assert(bad_usb->callback);
+        bad_usb->callback(BadUsbCustomEventSendPart, bad_usb->context);
+        return true;
+    }
 
     if(event->type == InputTypeShort) {
         if(event->key == InputKeyLeft) {

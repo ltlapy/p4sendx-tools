@@ -16,9 +16,13 @@ pick a file. The [guide](../../docs/guide.md) covers full transfers.
 | Button | Run screen |
 |---|---|
 | OK | `Run`, `Stop`, `End`, `Cancel` |
+| Hold OK | `Send Part`, on an archive, when idle |
 | Left | `Config`, when idle |
-| Right | `Pause` and `Resume`, while sending |
+| Right | `Send Part`, on an archive, when idle. `Pause` and `Resume`, while sending |
 | Up, Down | `P4S Slow`, `P4S Detect`, `P4S Key 0` to `24`, on `Classic` |
+
+`Send Part` asks for a part number and sends that part alone, for a part SB4 is missing. The screen
+says `Part k only`, and the time left is for that part. `P4S Start Part` stays as it was.
 
 The bottom left shows the time left. The second line shows the time so far.
 

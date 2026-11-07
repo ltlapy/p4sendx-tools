@@ -4,10 +4,10 @@
 #include <furi_hal.h>
 #include "toolbox/path.h"
 
-void bad_usb_scene_work_button_callback(InputKey key, void* context) {
+void bad_usb_scene_work_button_callback(uint32_t event, void* context) {
     furi_assert(context);
     BadUsbApp* app = context;
-    view_dispatcher_send_custom_event(app->view_dispatcher, key);
+    view_dispatcher_send_custom_event(app->view_dispatcher, event);
 }
 
 /* Slow, Detect, then the sync keys, one way or the other round. */
@@ -117,6 +117,13 @@ bool bad_usb_scene_work_on_event(void* context, SceneManagerEvent event) {
                 scene_manager_next_scene(app->scene_manager, BadUsbSceneConfig);
             }
             consumed = true;
+        } else if(event.event == BadUsbCustomEventSendPart) {
+            // The sender stays open, and USB with it, so a sync key is kept
+            if(bad_usb_view_is_idle_state(app->bad_usb_view) &&
+               bad_usb_sender_get_state(app->bad_usb_sender)->part_count > 0) {
+                scene_manager_next_scene(app->scene_manager, BadUsbSceneSendPart);
+            }
+            consumed = true;
         } else if(event.event == InputKeyOk) {
             bad_usb_sender_start_stop(app->bad_usb_sender);
             consumed = true;
@@ -148,6 +155,14 @@ bool bad_usb_scene_work_on_event(void* context, SceneManagerEvent event) {
 
 void bad_usb_scene_work_on_enter(void* context) {
     BadUsbApp* app = context;
+
+    if(app->bad_usb_sender) {
+        // Back from Send Part, with the sender still open
+        bad_usb_view_set_state(
+            app->bad_usb_view, bad_usb_sender_get_state(app->bad_usb_sender));
+        view_dispatcher_switch_to_view(app->view_dispatcher, BadUsbAppViewWork);
+        return;
+    }
 
     app->sound_state = BadUsbStateInit;
     app->sound_stage = BadUsbPartStageNone;

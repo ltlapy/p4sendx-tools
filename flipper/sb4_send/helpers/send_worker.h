@@ -42,6 +42,7 @@ typedef struct {
     uint32_t part_cur;
     uint32_t wait_left_s;
     BadUsbPartStage part_stage;
+    bool part_only; // Send Part: part_cur alone
 } BadUsbState;
 
 typedef enum {
@@ -85,6 +86,9 @@ void bad_usb_sender_start(BadUsbSender* bad_usb);
 void bad_usb_sender_stop(BadUsbSender* bad_usb);
 
 void bad_usb_sender_start_stop(BadUsbSender* bad_usb);
+
+/** Send Part: as Run, but only this part of an archive. */
+void bad_usb_sender_send_part(BadUsbSender* bad_usb, uint32_t part);
 
 void bad_usb_sender_pause_resume(BadUsbSender* bad_usb);
 

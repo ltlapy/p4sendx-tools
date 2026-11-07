@@ -142,7 +142,8 @@ P4SENDX reads parity, so keep it `Off` for stock P4SEND.
 ### Signal icon
 
 The bars at the top right of the receiving screen estimate the chance that the next part arrives, from
-the last 2.5 minutes of reception.
+the last 2.5 minutes of streams. Waits and idle time do not count. After a break, a new stream replaces
+the old reading once it has run 10 s.
 
 | Bars | Chance |
 |---:|---:|
@@ -156,17 +157,20 @@ the last 2.5 minutes of reception.
 
 ### A part failed
 
-P4SENDX shows `PART k FAILED` and `SET START PART k ON FLIPPER`, and the part turns orange on the bar.
+P4SENDX shows `PART k FAILED`, and the part turns orange on the bar. The Flipper goes on with the next
+part, and P4SENDX takes it. After the last part, P4SENDX lists the missing parts, e.g.
+`MISSING PARTS: 1-3, 7`. For each one:
 
 1. Press `Stop` on the Flipper.
-2. Open `Config`, select `P4S Start Part` and press OK. Enter k.
-3. Press `Run`. P4SENDX takes part k when it arrives.
+2. Press Right, or hold OK. Enter the part number and press OK.
 
-Parts count from 0. `P4S Start Part` stays saved, so **set it back to 0 for the next archive**.
+Parts count from 0. To send from a part to the end instead, set `P4S Start Part` in `Config`. It stays
+saved, so **set it back to 0 for the next archive**.
 
 ### You stopped, or the console slept
 
-Run `USB RECEIVE` again. P4SENDX finds the saved parts and shows `NEXT PART: k`. Set `P4S Start Part` to k.
+Run `USB RECEIVE` again. P4SENDX finds the saved parts and lists the missing ones. Send them as above,
+or set `P4S Start Part` to the first one.
 
 `[X] UNFINISHED TRANSFERS` lists saved archives, with `RESUME` and `DELETE`. Delete asks for X on the
 controller, since keys in a transfer could work a menu.

@@ -221,6 +221,7 @@ typedef struct {
     Petit4Batch batch;
     uint32_t start_part;
     uint32_t part; /* being sent, or next while waiting */
+    uint32_t end_part; /* the last part this run sends */
     uint32_t wait_ms;
     uint32_t wait_end;
     uint32_t sent_from_start; /* bytes stored for the parts from start_part on */
@@ -255,6 +256,10 @@ bool petit4_run_open(Petit4Run* run, Petit4Send* p);
 
 /** Run was pressed: from the Start Part again, at the next petit4_run_step. */
 void petit4_run_restart(Petit4Run* run, uint32_t now);
+
+/** Send Part: only this part, as a batch sends it, then confirming as at a batch's end.
+ * @return false for the reason petit4_error gives */
+bool petit4_run_restart_one(Petit4Run* run, Petit4Send* p, uint32_t part, uint32_t now);
 
 /** The stream of the current part has ended. */
 void petit4_run_part_sent(Petit4Run* run, uint32_t now);

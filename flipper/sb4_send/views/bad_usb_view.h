@@ -4,7 +4,9 @@
 #include "../helpers/send_worker.h"
 
 typedef struct BadUsb BadUsb;
-typedef void (*BadUsbButtonCallback)(InputKey key, void* context);
+/** An InputKey for a short press, or this. */
+#define BadUsbCustomEventSendPart 0x100
+typedef void (*BadUsbButtonCallback)(uint32_t event, void* context);
 
 BadUsb* bad_usb_view_alloc(void);
 

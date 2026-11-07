@@ -36,6 +36,7 @@ struct BadUsbApp {
     BadUsbSendConfig send_cfg;
     bool send_mode_unknown; // The settings hold a mode this build lacks: chosen by the file
     bool file_is_archive;
+    uint32_t send_part; // Send Part's choice, which is not saved
     BadUsbWorkerState sound_state;
     BadUsbPartStage sound_stage;
 };

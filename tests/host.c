@@ -8,7 +8,7 @@
  *       packets of the first part a run with that Start Part sends, with all
  *       rows of the table checked first; comp is ignored
  *   host --unit
- *       checks of names, archive headers and remaining time
+ *       checks of names, archive headers, remaining time and Send Part
  *   host --sim file wait_s jitter_ms seed
  *       the waits of a whole batch on a made-up clock, checking tap times */
 #include "petit4send.h"
@@ -87,6 +87,84 @@ static void name_is(Petit4Send*p,const char*file,const char*want){
 static void put32(uint8_t*h,uint32_t v){ h[0]=v; h[1]=v>>8; h[2]=v>>16; h[3]=v>>24; }
 static void head_of(uint8_t*h,const char*magic,uint32_t ps,uint32_t count,uint32_t image){
  memset(h,0,24); memcpy(h,magic,4); put32(h+8,ps); put32(h+12,count); put32(h+16,image);
+}
+/* An archive in memory: parts of 64, an image of 150, so pieces of 64, 64 and 22,
+ * stored as they are (12 + piece, to a multiple of 4) after the table. */
+static uint8_t arc[260]; static size_t arc_at;
+static size_t ard(void*c,uint8_t*b,size_t n){(void)c; size_t l=arc_at<sizeof(arc)?sizeof(arc)-arc_at:0; if(n>l)n=l; memcpy(b,arc+arc_at,n); arc_at+=n; return n;}
+static bool ask(void*c,uint32_t o){(void)c; if(o>sizeof(arc)) return false; arc_at=o; return true;}
+static void arc_make(uint32_t parity){
+ static const uint32_t off[3]={72,148,224},len[3]={76,76,36};
+ for(size_t i=0;i<sizeof(arc);i++) arc[i]=(uint8_t)(i*37+11);
+ memset(arc,0,72); memcpy(arc,"P4A4",4); put32(arc+4,0x1234); put32(arc+8,64); put32(arc+12,3); put32(arc+16,150); put32(arc+20,parity);
+ for(int i=0;i<3;i++){ uint8_t*r=arc+24+i*16; put32(r,off[i]); put32(r+4,len[i]); put32(r+8,len[i]); r[12]=0x34; r[13]=0x12; }
+}
+#define ONE_MAX 4096
+/* A whole run from part 0, its packets kept by part. */
+static long full_n[3]; static Petit4Packet full_k[3][ONE_MAX];
+static void full_run(Petit4Send*p,const Petit4Batch*b,uint8_t multi){
+ Petit4Run run; petit4_run_init(&run,b,0,5000); petit4_run_set_multi(&run,multi);
+ CHECK(petit4_run_open(&run,p));
+ uint32_t now=1000; petit4_run_restart(&run,now);
+ while(run.stage!=Petit4RunStageConfirm){
+  Petit4Packet k; int32_t w; Petit4RunEvent ev=petit4_run_step(&run,p,now,&k,&w);
+  if(ev==Petit4RunEventError){ CHECK(!"full run error"); return; }
+  if(ev==Petit4RunEventTapPress) petit4_tap_done(&run.tap,Petit4TapPress,now);
+  else if(ev==Petit4RunEventTapRelease) petit4_tap_done(&run.tap,Petit4TapRelease,now);
+  else if(ev==Petit4RunEventStartStream){
+   uint32_t part=run.part; full_n[part]=0;
+   while(full_n[part]<ONE_MAX&&petit4_next_packet(p,&full_k[part][full_n[part]])) full_n[part]++;
+   petit4_run_part_sent(&run,now);
+  }
+  now+=w>0?(uint32_t)w:1;
+ }
+}
+/* Send Part: the packets of that part in a whole run, then confirming; time left for it alone. */
+static void one_part_checks(void){
+ for(uint32_t parity=0;parity<=32;parity+=32){
+  arc_make(parity);
+  Petit4Batch b; CHECK(petit4_batch_parse(&b,arc,sizeof(arc),sizeof(arc),0)==NULL);
+  Petit4Send*p=petit4_alloc(ard,ask,NULL);
+  full_run(p,&b,0);
+  for(uint32_t part=0;part<3;part++){
+   Petit4Run run; petit4_run_init(&run,&b,1,5000); /* a Start Part that Send Part leaves alone */
+   CHECK(petit4_run_open(&run,p));
+   uint32_t now=7000;
+   CHECK(petit4_run_restart_one(&run,p,part,now));
+   CHECK(run.start_part==1&&run.part==part&&run.end_part==part);
+   /* with a packet a second, the time left is the packets left */
+   uint32_t said=petit4_run_remaining_s(&run,p,now,1000000);
+   Petit4Packet k; int32_t w;
+   CHECK(petit4_run_step(&run,p,now,&k,&w)==Petit4RunEventStartStream); /* no wait, no taps first */
+   CHECK(run.part==part);
+   long n=0; int same=1, left_ok=1;
+   while(petit4_next_packet(p,&k)){
+    if(n>=full_n[part]||memcmp(&k,&full_k[part][n],sizeof(k))) same=0;
+    n++;
+    if(parity&&petit4_run_remaining_s(&run,p,now,1000000)!=(uint32_t)(full_n[part]-n)) left_ok=0;
+   }
+   CHECK(full_n[part]>30); CHECK(same); CHECK(n==full_n[part]); CHECK(left_ok);
+   if(parity) CHECK(said==(uint32_t)full_n[part]);
+   else if(labs((long)said-full_n[part])>2){ printf("FAIL part %u alone: said %u, sent %ld\n",part,said,full_n[part]); fails++; }
+   petit4_run_part_sent(&run,now);
+   CHECK(run.stage==Petit4RunStageConfirm);
+   CHECK(petit4_run_remaining_s(&run,p,now,1000000)==PETIT4_REMAIN_NONE);
+   /* Run afterwards is a whole run from the Start Part again */
+   petit4_run_restart(&run,now);
+   CHECK(run.part==1&&run.end_part==2);
+   CHECK(petit4_run_remaining_s(&run,p,now,1000000)>=(uint32_t)(full_n[1]+full_n[2]));
+  }
+  { Petit4Run run; petit4_run_init(&run,&b,0,5000); CHECK(petit4_run_open(&run,p));
+    CHECK(!petit4_run_restart_one(&run,p,3,0)); CHECK(!strcmp(petit4_error(p),"Part past the end")); }
+  /* the NS2 link: the same, on its packets */
+  { Petit4Run run; petit4_run_init(&run,&b,0,5000); petit4_run_set_multi(&run,7); petit4_set_multi(p,7);
+    CHECK(petit4_run_open(&run,p)); CHECK(petit4_run_restart_one(&run,p,1,0));
+    uint32_t said=petit4_run_remaining_s(&run,p,0,1000000);
+    Petit4Packet k; int32_t w; CHECK(petit4_run_step(&run,p,0,&k,&w)==Petit4RunEventStartStream);
+    Petit4MultiPacket m; long n=0; while(petit4_next_multi(p,&m)) n++;
+    CHECK(said==(uint32_t)n); petit4_set_multi(p,0); }
+  petit4_free(p);
+ }
 }
 static int unit(void){
  Petit4Send*p=petit4_alloc(mrd,msk,NULL);
@@ -270,6 +348,7 @@ static int unit(void){
    while(petit4_next_multi(p,&q)){ m2++; if(m2>PETIT4_MULTI_LEAD&&q.keys[0][0]) for(int b=0;b<kb;b++) if(!memcmp(q.keys[b],was.keys[b],6)) same=1; was=q; }
    CHECK(!same); petit4_set_multi(p,0); }
  }
+ one_part_checks();
  printf("unit failures %d\n",fails);
  return fails?1:0;
 }

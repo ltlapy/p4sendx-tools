@@ -1160,6 +1160,7 @@ void petit4_run_init(
     run->batch = *batch;
     run->start_part = start_part;
     run->part = start_part;
+    run->end_part = batch->part_count - 1;
     run->wait_ms = wait_ms;
     run->stage = Petit4RunStageWait;
 }
@@ -1188,18 +1189,37 @@ bool petit4_run_open(Petit4Run* run, Petit4Send* p) {
     return run_begin_part(run, p);
 }
 
-void petit4_run_restart(Petit4Run* run, uint32_t now) {
-    run->part = run->start_part;
-    run->sent_left = run->sent_from_start;
-    /* A wait that is over at once and has no taps in it. */
+/* A wait that is over at once and has no taps in it. */
+static void run_wait_none(Petit4Run* run, uint32_t now) {
     run->stage = Petit4RunStageWait;
     run->wait_end = now;
     petit4_tap_start(&run->tap, now, now, false);
 }
 
+void petit4_run_restart(Petit4Run* run, uint32_t now) {
+    run->part = run->start_part;
+    run->end_part = run->batch.part_count - 1;
+    run->sent_left = run->sent_from_start;
+    run_wait_none(run, now);
+}
+
+bool petit4_run_restart_one(Petit4Run* run, Petit4Send* p, uint32_t part, uint32_t now) {
+    Petit4PartRow row;
+    if(part >= run->batch.part_count) {
+        p->error = "Part past the end";
+        return false;
+    }
+    if(!part_row_read(p, &run->batch, part, &row)) return false;
+    run->part = part;
+    run->end_part = part;
+    run->sent_left = row.sent;
+    run_wait_none(run, now);
+    return true;
+}
+
 void petit4_run_part_sent(Petit4Run* run, uint32_t now) {
     run->sent_left -= run->sent_cur;
-    if(run->part + 1 >= run->batch.part_count) {
+    if(run->part >= run->end_part) {
         run->stage = Petit4RunStageConfirm;
         petit4_tap_start(&run->tap, now, now, true);
         return;
@@ -1267,11 +1287,13 @@ uint32_t petit4_part_packets_multi(uint8_t keyboards, uint32_t parity, uint32_t 
     return PETIT4_MULTI_LEAD + groups * parity + sizeof(end_mods);
 }
 
-/* All packets of the parts from this one on, each stored as prefix, piece and padding. */
+/* All packets of the parts from this one to the run's last, each stored as prefix, piece
+ * and padding. */
 static uint64_t parity_parts_packets(const Petit4Run* run, uint32_t from) {
     const Petit4Batch* batch = &run->batch;
     uint32_t count = batch->part_count;
-    if(from >= count) return 0;
+    uint32_t end = run->end_part;
+    if(from > end) return 0;
     uint32_t piece = batch->image_size - (count - 1) * batch->part_size;
     uint32_t last_sent = (PART_PREFIX_SIZE + piece + 3) & ~3UL;
     uint32_t each_sent = PART_PREFIX_SIZE + batch->part_size;
@@ -1279,7 +1301,8 @@ static uint64_t parity_parts_packets(const Petit4Run* run, uint32_t from) {
                                  petit4_part_packets(batch->parity, last_sent);
     uint32_t each = run->multi ? petit4_part_packets_multi(run->multi, batch->parity, each_sent) :
                                  petit4_part_packets(batch->parity, each_sent);
-    return last + (uint64_t)(count - 1 - from) * each;
+    if(end + 1 < count) return (uint64_t)(end - from + 1) * each;
+    return last + (uint64_t)(end - from) * each;
 }
 
 uint32_t petit4_run_remaining_s(
@@ -1289,7 +1312,7 @@ uint32_t petit4_run_remaining_s(
     uint32_t packet_us) {
     if(run->stage == Petit4RunStageConfirm) return PETIT4_REMAIN_NONE;
 
-    uint32_t parts_after = run->batch.part_count - 1 - run->part;
+    uint32_t parts_after = run->end_part - run->part;
     uint32_t waits_s = parts_after * (run->wait_ms / 1000);
     if(run->batch.parity) {
         uint64_t packets;

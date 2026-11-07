@@ -14,6 +14,8 @@ extern "C" {
 
 #define TEXT_COUNT_BUFFER_LEN 16
 
+#define PETIT4_ONLY_NONE UINT32_MAX
+
 struct BadUsbSender {
     const BadUsbHidApi* hid;
     void* hid_inst;
@@ -42,6 +44,7 @@ struct BadUsbSender {
 
     bool petit4_batch;
     Petit4Run petit4_run;
+    volatile uint32_t petit4_only_next; // Send Part's part, or PETIT4_ONLY_NONE for Run
     uint32_t pause_tick;
     uint32_t send_mark; // st.elapsed when a single file began to go
     bool send_marked;
